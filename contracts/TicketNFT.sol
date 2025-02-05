@@ -16,7 +16,10 @@ contract TicketNFT is ERC1155, ITicketNFT {
         owner = msg.sender;
     }
 
-    function mintFromMarketPlace(address to, uint256 nftId) external override onlyOwner {
+    function mintFromMarketPlace(
+        address to,
+        uint256 nftId
+    ) external override onlyOwner {
         _mint(to, nftId, 1, "");
     }
 }
