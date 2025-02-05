@@ -19,9 +19,7 @@ contract TicketMarketplace is ITicketMarketplace {
         uint256 pricePerTicket;
         uint256 pricePerTicketERC20;
     }
-
     mapping(uint128 => Event) public events;
-
     modifier onlyOwner() {
         require(msg.sender == owner, "Unauthorized access");
         _;
@@ -60,47 +58,43 @@ contract TicketMarketplace is ITicketMarketplace {
         emit PriceUpdate(eventId, price, "ERC20");
     }
 
-function buyTickets(uint128 eventId, uint128 ticketCount) payable external override {
-    Event storage eventInfo = events[eventId];
-    
-    uint256 totalPrice;
-    unchecked {
-        totalPrice = eventInfo.pricePerTicket * ticketCount;
+    function buyTickets(uint128 eventId, uint128 ticketCount) payable external override {
+        Event storage eventInfo = events[eventId];
+        
+        uint256 totalPrice;
+        unchecked {
+            totalPrice = eventInfo.pricePerTicket * ticketCount;
+        }
+        require(totalPrice / ticketCount == eventInfo.pricePerTicket, "Overflow happened while calculating the total price of tickets. Try buying smaller number of tickets.");
+        
+        require(eventInfo.nextTicketToSell + ticketCount <= eventInfo.maxTickets, "We don't have that many tickets left to sell!");
+        require(msg.value >= totalPrice, "Not enough funds supplied to buy the specified number of tickets.");
+        
+        for (uint128 i = 0; i < ticketCount; i++) {
+            nftContract.mintFromMarketPlace(msg.sender, uint256(eventId) << 128 | eventInfo.nextTicketToSell + i);
+        }
+        eventInfo.nextTicketToSell += ticketCount;
+        emit TicketsBought(eventId, ticketCount, "ETH");
     }
-    require(totalPrice / ticketCount == eventInfo.pricePerTicket, "Overflow happened while calculating the total price of tickets. Try buying smaller number of tickets.");
-    
-    require(eventInfo.nextTicketToSell + ticketCount <= eventInfo.maxTickets, "We don't have that many tickets left to sell!");
-    require(msg.value >= totalPrice, "Not enough funds supplied to buy the specified number of tickets.");
-    
-    for (uint128 i = 0; i < ticketCount; i++) {
-        nftContract.mintFromMarketPlace(msg.sender, uint256(eventId) << 128 | eventInfo.nextTicketToSell + i);
-    }
-    eventInfo.nextTicketToSell += ticketCount;
-    emit TicketsBought(eventId, ticketCount, "ETH");
-}
 
-function buyTicketsERC20(uint128 eventId, uint128 ticketCount) external override {
-    Event storage eventInfo = events[eventId];
-    
-    uint256 totalPrice;
-    unchecked {
-        totalPrice = eventInfo.pricePerTicketERC20 * ticketCount;
+    function buyTicketsERC20(uint128 eventId, uint128 ticketCount) external override {
+        Event storage eventInfo = events[eventId];
+        uint256 totalPrice;
+        unchecked {
+            totalPrice = eventInfo.pricePerTicketERC20 * ticketCount;
+        }
+        require(totalPrice / ticketCount == eventInfo.pricePerTicketERC20, "Overflow happened while calculating the total price of tickets. Try buying smaller number of tickets.");
+        require(eventInfo.nextTicketToSell + ticketCount <= eventInfo.maxTickets, "We don't have that many tickets left to sell!");
+        IERC20 erc20 = IERC20(ERC20Address);
+        require(erc20.balanceOf(msg.sender) >= totalPrice, "Not enough funds on the account.");
+        require(erc20.allowance(msg.sender, address(this)) >= totalPrice, "Not enough allowance.");
+        erc20.transferFrom(msg.sender, address(this), totalPrice);
+        for (uint128 i = 0; i < ticketCount; i++) {
+            nftContract.mintFromMarketPlace(msg.sender, uint256(eventId) << 128 | eventInfo.nextTicketToSell + i);
+        }
+        eventInfo.nextTicketToSell += ticketCount;
+        emit TicketsBought(eventId, ticketCount, "ERC20");
     }
-    require(totalPrice / ticketCount == eventInfo.pricePerTicketERC20, "Overflow happened while calculating the total price of tickets. Try buying smaller number of tickets.");
-    
-    require(eventInfo.nextTicketToSell + ticketCount <= eventInfo.maxTickets, "We don't have that many tickets left to sell!");
-    
-    IERC20 erc20 = IERC20(ERC20Address);
-    require(erc20.balanceOf(msg.sender) >= totalPrice, "Not enough funds on the account.");
-    require(erc20.allowance(msg.sender, address(this)) >= totalPrice, "Not enough allowance.");
-    erc20.transferFrom(msg.sender, address(this), totalPrice);
-    
-    for (uint128 i = 0; i < ticketCount; i++) {
-        nftContract.mintFromMarketPlace(msg.sender, uint256(eventId) << 128 | eventInfo.nextTicketToSell + i);
-    }
-    eventInfo.nextTicketToSell += ticketCount;
-    emit TicketsBought(eventId, ticketCount, "ERC20");
-}
 
     function setERC20Address(address newERC20Address) external onlyOwner override {
         ERC20Address = newERC20Address;
